@@ -1,5 +1,72 @@
 #!/usr/bin/perl
 
+=head1 WWW::Tumblr - Perl interface for the Tumblr API
+
+=head1 SYNOPSIS
+
+ use WWW::Tumblr;
+ 
+ # read method
+ my $t = WWW::Tumblr->new;
+ 
+ # Will read http://juanito.tumblr.com/api/read
+ $t->user('juanito');
+ # Will read http://log.damog.net/api/read
+ $t->url('http://log.damog.net');
+ # Pass Tumblr API read arguments to the read() method
+ $t->read(
+ 	start => 2,
+ 	num	=> 10,
+ 	...
+ );
+ # Will get you JSON back
+ # Same arguments as read, as defined by the API
+ $t->read_json(
+ 	...
+ );
+ 
+ # write
+ # Object initialization
+ my $t = WWW::Tumblr->new;
+ # The email you use to log in to Tumblr	
+ $t->email('pepito@chistes.com');
+ $t->password('foobar');
+ 
+ # You will always have to pass a type to write() and the additional
+ # args depend on that type and the requests by the Tumblr API
+ $t->write(
+ 	type => 'regular',
+ 	body => 'My body text',
+ 	...
+ 	type => 'quote',
+ 	quote => 'I once had a girlfriend...',
+ 	...
+ 	type => 'conversation',
+ 	title => 'On the subway...',
+ 	conversation => 'Meh, meh, meh.',
+ );
+ 
+ # other actions
+ $t->authenticate or die $t->errstr;
+ $t->check_audio or die $t->errstr;
+ my $vimeo = $t->check_vimeo or die $t->errstr;
+
+All options passed to C<read>, C<read_json> and C<write> are all of the parameters
+specified on L<http://www.tumblr.com/api> and you simple have to pass them as key =>
+values argument pairs.
+
+The Tumblr API is not really long or difficult and this implementation covers it fully
+(with the exception of file uploads at the time of writing).
+
+=head2 Why did you write this?
+
+Because I can! And because I wanted to use a sane OO way to implement
+L<Blog::Normalize::Tumblr> without just scrapping, which is what I did, heh.
+
+=head1 METHODS
+
+=cut
+
 package WWW::Tumblr;
 
 use strict;
@@ -9,7 +76,23 @@ use Carp;
 use Data::Dumper;
 use LWP::UserAgent;
 
-our $VERSION = '1';
+our $VERSION = '2';
+
+=head2 new
+
+ new(
+ 	user => $user,
+ 	email => $email,
+ 	password => $password,
+ 	url => $url,
+ );
+
+Initilizes a class instance.
+
+All arguments are optional, you can specify most of them here on each of the method
+calls anyway.
+
+=cut
 
 sub new {
 	my($class, %opts) = shift;
@@ -25,11 +108,35 @@ sub new {
 	}, $class;
 }
 
+=head2 email
+
+ email(
+ 	$email
+ );
+
+If C<$email> is specified, it sets the email class variable, otherwise, the
+previous value is returned. This is the email that users use to log in to
+Tumblr.
+
+=cut
+
 sub email {
 	my($self, $email) = @_;
 	$self->{email} = $email if $email;
 	$self->{email};
 }
+
+=head2 password
+
+ password(
+ 	$password
+ );
+
+If C<$password> is specified, it sets the password class variable, otherwise
+the previous value is returned. This is the password used by users to log in
+to Tumblr.
+
+=cut
 
 sub password {
 	my($self, $password) = @_;
@@ -37,11 +144,35 @@ sub password {
 	$self->{password};
 }
 
+=head2 user
+
+ user(
+ 	$user
+ );
+
+If C<$user> is specified, it sets the user class variable, otherwise
+the previous value is returned. This is the user portion of the tumblr.com
+URL (ie. maria.tumblr.com).
+
+=cut
+
 sub user {
 	my($self, $user) = @_;
 	$self->{user} = $user if $user;
 	$self->{user};
 }
+
+=head2 url
+
+ url(
+ 	$url
+ );
+
+If C<$url> is specified, it sets the url class variable. Otherwise,
+the previous value is returned. This is the URL that some people might
+use for their Tumblelogs instead of user.tumblr.com (in my case, L<http://log.damog.net>).
+
+=cut
 
 sub url {
 	my($self, $url) = @_;
@@ -57,11 +188,36 @@ sub url {
 	return $self->{url};
 }
 
+=head2 read_json
+
+ read_json(
+ 	# read params
+ 	...
+ );
+
+Returns the JSON version of c<read>, it accepts the same Tumblr API
+arguments. It returns the JSON version of C<read>.
+
+=cut
+
 sub read_json {
 	my($self, %opts) = @_;
 	$opts{json} = 1;
 	return $self->read(%opts);
 }
+
+=head2 read
+
+ read(
+ 	# read args
+ 	...
+ );
+
+You should have specified the user or url to use this method. Parameters
+to be passed are the ones specified on the Tumblr API, such as id, num,
+type, etc. It returns an XML string containing the output.
+
+=cut
 
 sub read {
 	my($self, %opts) = @_;
@@ -77,6 +233,21 @@ sub read {
 	return $self->{ua}->get($url)->content;
 
 }
+
+=head2 write
+
+ write(
+ 	type => $type,
+ 	...
+ 	# other write args
+ );
+
+Posts a C<type> item with the needed arguments from the Tumblr API.
+The C<type> argument is mandatory. C<email> and C<password> should have
+been specified before too. In success, it returns true, otherwise, it
+returns undef.
+
+=cut 
 
 sub write {
 	my($self, %opts) = @_;
@@ -103,10 +274,147 @@ sub write {
 	
 }
 
+=head2 check_audio
+
+ check_audio();
+
+Checks if the user can upload an audio file. Returns true or undef.
+
+=cut
+
+sub check_audio {
+	my($self) = shift;
+	
+	croak "No email was defined" unless $self->email;
+	croak "No password was defined" unless $self->password;
+	
+	$self->_POST_request(
+		qq{action=check-audio&email=${\$self->email}&password=${\$self->password}}
+	) or return;
+}
+
+=head2 check_vimeo
+
+ check_vimeo();
+
+Checks if the user is logged in on Vimeo, as specified by the Tumblr API.
+Returns the maximum number of bytes available for the user to upload in case
+the user is logged in, otherwise it returns undef.
+
+=cut
+
+sub check_vimeo {
+	my($self) = shift;
+	
+	croak "No email was defined" unless $self->email;
+	croak "No password was defined" unless $self->password;
+	
+	$self->_POST_request(
+		qq{action=check-vimeo&email=${\$self->email}&password=${\$self->password}}
+	) or return;
+	
+	return $self->{_response};
+}
+
+=head2 authenticate
+
+ authenticate();
+
+Checks if the C<email> and C<password> specified are correct. If they are,
+it returns true, otherwise, undef.
+
+=cut
+
+sub authenticate {
+	my($self) = shift;
+	
+	croak "No email was defined" unless $self->email;
+	croak "No password was defined" unless $self->password;
+
+	$self->_POST_request(
+		qq{action=authenticate&email=${\$self->email}&password=${\$self->password}}
+	) or return;
+}
+
+=head2 errstr
+
+ errstr();
+
+It returns the error string for the last operation, so you can see why
+other methods failed.
+
+=cut
+
 sub errstr {
 	my($self, $err) = @_;
 	$self->{errstr} = $err if $err;
 	$self->{errstr};
 }
+
+=head2 _POST_request
+
+ _POST_request($string);
+
+Internal method to post C<$string> to Tumblr. You shouldn't be using it anyway.
+
+=cut
+
+
+sub _POST_request {
+	my($self, $args) = @_;
+	
+	croak "No arguments present" unless $args;
+	
+	my $req = HTTP::Request->new(POST => 'http://www.tumblr.com/api/write');
+	$req->content_type('application/x-www-form-urlencoded');
+	$req->content($args);
+	
+	my $res = $self->{ua}->request($req);
+	
+	if($res->is_success) {
+		return $self->{_response} = $res->decoded_content;
+	} else {
+		$self->{_response} = $res->decoded_content;
+		$self->errstr($self->{_response});
+		return;
+	}
+	
+}
+
+=head1 TODO
+
+File uploads.
+
+=head1 SEE ALSO
+
+L<http://tumblr.com>, L<http://tumblr.com/api>. See also the sample scripts on the examples/ dir.
+
+=head1 AUTHOR
+
+David Moreno Garza, E<lt>david@axiombox.comE<gt>
+
+=head1 THANKS
+
+You know who (L<http://maggit.net>).
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2008 by David Moreno Garza - Axiombox
+
+L<http://axiombox.com>
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.8 or,
+at your option, any later version of Perl 5 you may have available.
+
+The Do What The Fuck You Want To public license also applies. It's
+really up to you.
+
+=head1 DISCLAIMER
+
+I'm not a worker nor affiliated to Tumblr in any way, and this is a
+separated implementation of their own public API.
+
+=cut
 
 1;
