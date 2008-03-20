@@ -1,6 +1,8 @@
-examples/test.pl
+examples/read_json.pl
+examples/write.pl
 lib/WWW/Tumblr.pm
 .project
 Makefile.PL
 MANIFEST
 README
+Changes
