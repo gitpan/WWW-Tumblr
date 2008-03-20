@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 
-=head1 WWW::Tumblr - Perl interface for the Tumblr API
+=head1 NAME
+
+WWW::Tumblr - Perl interface for the Tumblr API
 
 =head1 SYNOPSIS
 
@@ -44,6 +46,11 @@
  	type => 'conversation',
  	title => 'On the subway...',
  	conversation => 'Meh, meh, meh.',
+ 	...
+ 	# File uploads:
+ 	type => 'audio',
+ 	data => '/tmp/my.mp3',
+ 	...
  );
  
  # other actions
@@ -55,8 +62,7 @@ All options passed to C<read>, C<read_json> and C<write> are all of the paramete
 specified on L<http://www.tumblr.com/api> and you simple have to pass them as key =>
 values argument pairs.
 
-The Tumblr API is not really long or difficult and this implementation covers it fully
-(with the exception of file uploads at the time of writing).
+The Tumblr API is not really long or difficult and this implementation covers it fully.
 
 =head2 Why did you write this?
 
@@ -75,8 +81,9 @@ use warnings;
 use Carp;
 use Data::Dumper;
 use LWP::UserAgent;
+use HTTP::Request::Common;
 
-our $VERSION = '2';
+our $VERSION = '2.01';
 
 =head2 new
 
@@ -245,7 +252,8 @@ sub read {
 Posts a C<type> item with the needed arguments from the Tumblr API.
 The C<type> argument is mandatory. C<email> and C<password> should have
 been specified before too. In success, it returns true, otherwise, it
-returns undef.
+returns undef. For file uploads, just specify the filename on the C<data>
+argument.
 
 =cut 
 
@@ -259,11 +267,21 @@ sub write {
 	$opts{'email'} = $self->email;
 	$opts{'password'} = $self->password;
 	
-	my $req = HTTP::Request->new(POST => 'http://www.tumblr.com/api/write');
-	$req->content_type('application/x-www-form-urlencoded');
-	$req->content(join '&', map{ qq{$_=$opts{$_}} } sort keys %opts);
+	my $req;
+	my $res;
 	
-	my $res = $self->{ua}->request($req);
+	# If there's a file to upload or not
+	if($opts{data}) {
+		$opts{data} = [$opts{data}]; # whack!
+		
+		$res = $self->{ua}->request(POST 'http://www.tumblr.com/api/write', Content_Type => 'form-data', Content => \%opts);
+		
+	} else {
+		$req = HTTP::Request->new(POST => 'http://www.tumblr.com/api/write');
+		$req->content_type('application/x-www-form-urlencoded');
+		$req->content(join '&', map{ qq{$_=$opts{$_}} } sort keys %opts);
+		$res = $self->{ua}->request($req);
+	}
 	
 	if($res->is_success) {
 		return $res->decoded_content;
@@ -381,10 +399,6 @@ sub _POST_request {
 	
 }
 
-=head1 TODO
-
-File uploads.
-
 =head1 SEE ALSO
 
 L<http://tumblr.com>, L<http://tumblr.com/api>. See also the sample scripts on the examples/ dir.
@@ -406,9 +420,6 @@ L<http://axiombox.com>
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.8 or,
 at your option, any later version of Perl 5 you may have available.
-
-The Do What The Fuck You Want To public license also applies. It's
-really up to you.
 
 =head1 DISCLAIMER
 

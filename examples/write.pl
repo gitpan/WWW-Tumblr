@@ -3,12 +3,14 @@
 use strict;
 use warnings;
 
+use lib '../lib';
+
 use WWW::Tumblr;
 
 my $tumblr = WWW::Tumblr->new;
 
-$tumblr->email('my@email.com');
-$tumblr->password('h4x0r');
+$tumblr->email('foo@bar.com');
+$tumblr->password('');
 
-$tumblr->write(type => 'regular', body => 'WWW::Tumblr test.')
+$tumblr->write(type => 'regular', title => 'whaaaaaaaaaa')
 	or die $tumblr->errstr;

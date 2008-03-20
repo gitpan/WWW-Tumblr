@@ -11,6 +11,7 @@ my $t = WWW::Tumblr->new;
 
 $t->email('hola@adios.com');
 $t->password('sdf');
+
 my $s = $t->check_vimeo or die $t->errstr;
 
 print $s;
