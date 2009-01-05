@@ -83,7 +83,7 @@ use Data::Dumper;
 use LWP::UserAgent;
 use HTTP::Request::Common;
 
-our $VERSION = '2.01';
+our $VERSION = '3.01';
 
 =head2 new
 
@@ -102,7 +102,7 @@ calls anyway.
 =cut
 
 sub new {
-	my($class, %opts) = shift;
+	my($class, %opts) = @_;
 
 	my $ua = LWP::UserAgent->new;
 	
