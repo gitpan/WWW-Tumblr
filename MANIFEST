@@ -4,8 +4,8 @@ examples/check-vimeo.pl
 examples/read_json.pl
 examples/write.pl
 lib/WWW/Tumblr.pm
-.project
 Changes
 Makefile.PL
 MANIFEST
 README
+Rakefile

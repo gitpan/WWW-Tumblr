@@ -13,14 +13,17 @@ WWW::Tumblr - Perl interface for the Tumblr API
  
  # Will read http://juanito.tumblr.com/api/read
  $t->user('juanito');
+
  # Will read http://log.damog.net/api/read
  $t->url('http://log.damog.net');
+
  # Pass Tumblr API read arguments to the read() method
  $t->read(
  	start => 2,
  	num	=> 10,
  	...
  );
+
  # Will get you JSON back
  # Same arguments as read, as defined by the API
  $t->read_json(
@@ -30,6 +33,7 @@ WWW::Tumblr - Perl interface for the Tumblr API
  # write
  # Object initialization
  my $t = WWW::Tumblr->new;
+
  # The email you use to log in to Tumblr	
  $t->email('pepito@chistes.com');
  $t->password('foobar');
@@ -40,13 +44,16 @@ WWW::Tumblr - Perl interface for the Tumblr API
  	type => 'regular',
  	body => 'My body text',
  	...
+
  	type => 'quote',
  	quote => 'I once had a girlfriend...',
  	...
+
  	type => 'conversation',
  	title => 'On the subway...',
  	conversation => 'Meh, meh, meh.',
  	...
+
  	# File uploads:
  	type => 'audio',
  	data => '/tmp/my.mp3',
@@ -56,6 +63,7 @@ WWW::Tumblr - Perl interface for the Tumblr API
  # other actions
  $t->authenticate or die $t->errstr;
  $t->check_audio or die $t->errstr;
+
  my $vimeo = $t->check_vimeo or die $t->errstr;
 
 All options passed to C<read>, C<read_json> and C<write> are all of the parameters
@@ -63,11 +71,6 @@ specified on L<http://www.tumblr.com/api> and you simple have to pass them as ke
 values argument pairs.
 
 The Tumblr API is not really long or difficult and this implementation covers it fully.
-
-=head2 Why did you write this?
-
-Because I can! And because I wanted to use a sane OO way to implement
-L<Blog::Normalize::Tumblr> without just scrapping, which is what I did, heh.
 
 =head1 METHODS
 
@@ -83,7 +86,7 @@ use Data::Dumper;
 use LWP::UserAgent;
 use HTTP::Request::Common;
 
-our $VERSION = '3.01';
+our $VERSION = '4';
 
 =head2 new
 
@@ -224,21 +227,43 @@ You should have specified the user or url to use this method. Parameters
 to be passed are the ones specified on the Tumblr API, such as id, num,
 type, etc. It returns an XML string containing the output.
 
+If the option C<auth =&gt; 1> is passed, an authenticated read request
+is being made in order to retrieve the private posts as well. See
+Tumblr's API for details.
+
 =cut
 
 sub read {
 	my($self, %opts) = @_;
 	
+  my $auth;
+  if($opts{auth}) {
+    croak "No email or password defined"
+      if not $self->email or not $self->password;
+    $auth = 1;
+    delete $opts{auth};
+  }
+
 	croak "No user or url defined" unless $self->user or $self->url;
 
 	my $url = $self->url . '/api/read';
 	
 	$url .= '/json' if defined $opts{json};
-	
 	$url .= '?'.join'&',map{qq{$_=$opts{$_}}} sort keys %opts;
-	
-	return $self->{ua}->get($url)->content;
 
+  if($auth) {
+    my $req = HTTP::Request->new(POST => $url);
+    $req->content(join '&', map{ qq{$_=$opts{$_}} } sort keys %opts);
+    my $res = $self->{ua}->request($req);
+    if($res->is_success) {
+      return $res->decoded_content;
+    } else {
+      $self->errstr($res->as_string);
+      return;
+    }
+  } else {
+    return $self->{ua}->get($url)->content;
+  }
 }
 
 =head2 write
@@ -292,9 +317,54 @@ sub write {
 	
 }
 
+=head2 edit
+
+ edit(
+   'post-id' => 123,
+   type => 'regular',
+   title => 'This has changed!',
+   ...
+ );
+
+Edits the post idenfied with C<post-id>. The same parameters as those used
+with C<write> can be used, but C<post-id> has to be specified.
+
+=cut
+
+=head2 delete
+
+ delete(
+   'post-id' => 123,
+ );
+
+Deletes the post idenfied with the C<post-id> id.
+
+=cut
+
+sub delete {
+  my($self, %opts) = @_;
+
+  croak "No email was defined" unless $self->email;
+  croak "No password was defined" unless $self->password;
+
+  my $req = HTTP::Request->new(POST => 'http://www.tumblr.com/api/delete');
+  $req->content(join '&', map { qq{$_=$opts{$_}} } sort keys %opts);
+  my $res = $self->{ua}->request($req);
+  
+  if($res->is_success) {
+    return $res->decoded_content;
+  } else {
+    $self->errstr($res->as_string);
+    return;
+  }
+}
+
 =head2 check_audio
 
  check_audio();
+
+This method has been deprecated on this implementation since it was
+also on the Tumblr API.
 
 Checks if the user can upload an audio file. Returns true or undef.
 
@@ -314,6 +384,8 @@ sub check_audio {
 =head2 check_vimeo
 
  check_vimeo();
+
+Deprecated as the Tumblr API discontinued it.
 
 Checks if the user is logged in on Vimeo, as specified by the Tumblr API.
 Returns the maximum number of bytes available for the user to upload in case
@@ -402,6 +474,13 @@ sub _POST_request {
 =head1 SEE ALSO
 
 L<http://tumblr.com>, L<http://tumblr.com/api>. See also the sample scripts on the examples/ dir.
+
+This and other interesting modules and hacks are posted by the author on
+his blog Infinite Pig Theorem, L<http://damog.net>.
+
+=head 1 CODE
+
+The code is actively maintained at L<http://github.com/damog/www-tumblr>.
 
 =head1 AUTHOR
 

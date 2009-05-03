@@ -1,5 +1,9 @@
-3.01 Mon Jan  5 12:14:25 EST 2009
-	- Capturing @_ instead of just $_[0].
+4 - Sat May  2 22:54:25 EDT 2009
+  - Up to date with Tumblr's API.
+  - Added information for "edit" and "delete".
+
+3.01.1 - Fri Jan  2 12:52:09 EST 2009
+	- Fix CPAN RT bug 42084
 
 3 To Me You Are A Work Of Art - Thu Mar 20 17:39:00 EDT 2008
 	- File uploads included on the write method.
