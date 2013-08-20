@@ -1,517 +1,356 @@
-#!/usr/bin/perl
-
-=head1 NAME
-
-WWW::Tumblr - Perl interface for the Tumblr API
-
-=head1 SYNOPSIS
-
- use WWW::Tumblr;
- 
- # read method
- my $t = WWW::Tumblr->new;
- 
- # Will read http://juanito.tumblr.com/api/read
- $t->user('juanito');
-
- # Will read http://log.damog.net/api/read
- $t->url('http://log.damog.net');
-
- # Pass Tumblr API read arguments to the read() method
- $t->read(
- 	start => 2,
- 	num	=> 10,
- 	...
- );
-
- # Will get you JSON back
- # Same arguments as read, as defined by the API
- $t->read_json(
- 	...
- );
- 
- # write
- # Object initialization
- my $t = WWW::Tumblr->new;
-
- # The email you use to log in to Tumblr	
- $t->email('pepito@chistes.com');
- $t->password('foobar');
- 
- # You will always have to pass a type to write() and the additional
- # args depend on that type and the requests by the Tumblr API
- $t->write(
- 	type => 'regular',
- 	body => 'My body text',
- 	...
-
- 	type => 'quote',
- 	quote => 'I once had a girlfriend...',
- 	...
-
- 	type => 'conversation',
- 	title => 'On the subway...',
- 	conversation => 'Meh, meh, meh.',
- 	...
-
- 	# File uploads:
- 	type => 'audio',
- 	data => '/tmp/my.mp3',
- 	...
- );
- 
- # other actions
- $t->authenticate or die $t->errstr;
- $t->check_audio or die $t->errstr;
-
- my $vimeo = $t->check_vimeo or die $t->errstr;
-
-All options passed to C<read>, C<read_json> and C<write> are all of the parameters
-specified on L<http://www.tumblr.com/api> and you simple have to pass them as key =>
-values argument pairs.
-
-The Tumblr API is not really long or difficult and this implementation covers it fully.
-
-=head1 METHODS
-
-=cut
-
 package WWW::Tumblr;
 
 use strict;
 use warnings;
 
-use Carp;
-use Data::Dumper;
-use LWP::UserAgent;
-use HTTP::Request::Common;
+our $VERSION = '5.00_01';
 
-our $VERSION = '4.1';
+=pod
 
-=head2 new
+=head1 NAME
 
- new(
- 	user => $user,
- 	email => $email,
- 	password => $password,
- 	url => $url,
- );
+WWW::Tumblr - Perl bindings for the Tumblr API
 
-Initilizes a class instance.
+=head1 VERSION
 
-All arguments are optional, you can specify most of them here on each of the method
-calls anyway.
+5.00_01 (experimental release)
 
-=cut
+=head1 SYNOPSIS
 
-sub new {
-	my($class, %opts) = @_;
+  my $t = WWW::Tumblr->new(
+     consumer_key    => $consumer_key,
+     secret_key      => $secret_key,
+     token           => $token,
+     token_secret    => $token_secret,
+  );
+ 
+  my $blog = $t->blog('perlapi.tumblr.com');
 
-	my $ua = LWP::UserAgent->new;
-	
-	return bless {
-		user		=> $opts{user},
-		email		=> $opts{email},
-		password	=> $opts{password},
-		url			=> $opts{url},
-		ua 			=>	$ua,
-	}, $class;
-}
+  print Dumper $blog->info;
 
-=head2 email
+head1 DESCRIPTION
 
- email(
- 	$email
- );
+This module makes use of some sort of the same models as the upstream API,
+meaning that you will have User, Blog and Tagged methods:
 
-If C<$email> is specified, it sets the email class variable, otherwise, the
-previous value is returned. This is the email that users use to log in to
-Tumblr.
+  my $t = WWW::Tumblr->new(
+    consumer_key    => $consumer_key,
+    secret_key      => $secret_key,
+    token           => $token,
+    token_secret    => $token_secret,
+  );
 
-=cut
-
-sub email {
-	my($self, $email) = @_;
-	$self->{email} = $email if $email;
-	$self->{email};
-}
-
-=head2 password
-
- password(
- 	$password
- );
-
-If C<$password> is specified, it sets the password class variable, otherwise
-the previous value is returned. This is the password used by users to log in
-to Tumblr.
-
-=cut
-
-sub password {
-	my($self, $password) = @_;
-	$self->{password} = $password if $password;
-	$self->{password};
-}
-
-=head2 user
-
- user(
- 	$user
- );
-
-If C<$user> is specified, it sets the user class variable, otherwise
-the previous value is returned. This is the user portion of the tumblr.com
-URL (ie. maria.tumblr.com).
-
-=cut
-
-sub user {
-	my($self, $user) = @_;
-	$self->{user} = $user if $user;
-	$self->{user};
-}
-
-=head2 url
-
- url(
- 	$url
- );
-
-If C<$url> is specified, it sets the url class variable. Otherwise,
-the previous value is returned. This is the URL that some people might
-use for their Tumblelogs instead of user.tumblr.com (in my case, L<http://log.damog.net>).
-
-=cut
-
-sub url {
-	my($self, $url) = @_;
-	
-	if($url) {
-		$self->{url} = $url;
-		$self->{url} =~ s/\/\z//;
-	} else {
-		$self->{url} = 'http://' . $self->user . '.tumblr.com'
-			if $self->user;
-	}
-	
-	return $self->{url};
-}
-
-=head2 read_json
-
- read_json(
- 	# read params
- 	...
- );
-
-Returns the JSON version of c<read>, it accepts the same Tumblr API
-arguments. It returns the JSON version of C<read>.
-
-=cut
-
-sub read_json {
-	my($self, %opts) = @_;
-	$opts{json} = 1;
-	return $self->read(%opts);
-}
-
-=head2 read
-
- read(
- 	# read args
- 	...
- );
-
-You should have specified the user or url to use this method. Parameters
-to be passed are the ones specified on the Tumblr API, such as id, num,
-type, etc. It returns an XML string containing the output.
-
-If the option C<auth =&gt; 1> is passed, an authenticated read request
-is being made in order to retrieve the private posts as well. See
-Tumblr's API for details.
-
-=cut
-
-sub read {
-	my($self, %opts) = @_;
-	
-  my $auth;
-  if($opts{auth}) {
-    croak "No email or password defined"
-      if not $self->email or not $self->password;
-    $auth = 1;
-    delete $opts{auth};
-  }
-
-	croak "No user or url defined" unless $self->user or $self->url;
-
-	my $url = $self->url . '/api/read';
-	
-	$url .= '/json' if defined $opts{json};
-	$url .= '?'.join'&',map{qq{$_=$opts{$_}}} sort keys %opts;
-
-  if($auth) {
-    $opts{email} = $self->email;
-    $opts{password} = $self->password;
-    my $req = HTTP::Request->new(POST => $url);
-    $req->content_type('application/x-www-form-urlencoded');
-    $req->content(join '&', map{ qq{$_=$opts{$_}} } sort keys %opts);
-    my $res = $self->{ua}->request($req);
-    if($res->is_success) {
-      return $res->decoded_content;
-    } else {
-      $self->errstr($res->as_string);
-      return;
-    }
-  } else {
-    return $self->{ua}->get($url)->content;
-  }
-}
-
-=head2 write
-
- write(
- 	type => $type,
- 	...
- 	# other write args
- );
-
-Posts a C<type> item with the needed arguments from the Tumblr API.
-The C<type> argument is mandatory. C<email> and C<password> should have
-been specified before too. In success, it returns true, otherwise, it
-returns undef. For file uploads, just specify the filename on the C<data>
-argument.
-
-=cut 
-
-sub write {
-	my($self, %opts) = @_;
-
-	croak "No email was defined" unless $self->email;
-	croak "No password was defined" unless $self->password;
-	croak "No type defined for writing" unless $opts{type};
-	
-	$opts{'email'} = $self->email;
-	$opts{'password'} = $self->password;
-	
-	my $req;
-	my $res;
-	
-	# If there's a file to upload or not
-	if($opts{data}) {
-		$opts{data} = [$opts{data}]; # whack!
-		
-		$res = $self->{ua}->request(POST 'http://www.tumblr.com/api/write', Content_Type => 'form-data', Content => \%opts);
-		
-	} else {
-		$req = HTTP::Request->new(POST => 'http://www.tumblr.com/api/write');
-		$req->content_type('application/x-www-form-urlencoded');
-		$req->content(join '&', map{ qq{$_=$opts{$_}} } sort keys %opts);
-		$res = $self->{ua}->request($req);
-	}
-	
-	if($res->is_success) {
-		return $res->decoded_content;
-	} else {
-		$self->errstr($res->as_string);
-		return;
-	}
-	
-}
-
-=head2 edit
-
- edit(
-   'post-id' => 123,
-   type => 'regular',
-   title => 'This has changed!',
-   ...
- );
-
-Edits the post idenfied with C<post-id>. The same parameters as those used
-with C<write> can be used, but C<post-id> has to be specified.
-
-=cut
-
-=head2 delete
-
- delete(
-   'post-id' => 123,
- );
-
-Deletes the post idenfied with the C<post-id> id.
-
-=cut
-
-sub delete {
-  my($self, %opts) = @_;
-
-  $opts{email} = $self->email;
-  $opts{password} = $self->password;
-
-  croak "No email was defined" unless $self->email;
-  croak "No password was defined" unless $self->password;
-
-  my $req = HTTP::Request->new(POST => 'http://www.tumblr.com/api/delete');
-  $req->content_type('application/x-www-form-urlencoded');
-  $req->content(join '&', map { qq{$_=$opts{$_}} } sort keys %opts);
-  my $res = $self->{ua}->request($req);
+  # Once you have a WWW::Tumblr object, you can get a WWW::Tumblr::Blog object
+  # by calling the blog() method from the former object:
   
-  if($res->is_success) {
-    return $res->decoded_content;
+  my $blog = $t->blog('perlapi.tumblr.com');
+ 
+  # And then just use WWW::Tumblr::Blog methods from it:
+  if ( my $post = $blog->post( type => 'text', body => 'Hell yeah, son!' ) ) {
+     say "I have published post id: " . $post->{id};    
   } else {
-    $self->errstr($res->as_string);
-    return;
+     print STDERR Dumper $blog->error;
+     die "I couldn't post it :(";
   }
-}
 
-=head2 check_audio
+You can also work directly with a L<WWW::Tumblr::Blog> class for example:
 
- check_audio();
+  # You will need to set base_hostname:
+  my $blog = WWW::Tumblr::Blog->new(
+     %four_tokens,
+     base_hostname => 'myblogontumblr.com'
+  );
 
-This method has been deprecated on this implementation since it was
-also on the Tumblr API.
+All operation methods on the entire API will return false in case of an
+upstream error and you can check the status with C<error()>:
 
-Checks if the user can upload an audio file. Returns true or undef.
+  die Dumper $blog->error unless $blog->info();
 
-=cut
+On success, methods will return a hash reference with the JSON representation
+of the upstream response. This behavior has not changed from previous versions
+of this module.
 
-sub check_audio {
-	my($self) = shift;
-	
-	croak "No email was defined" unless $self->email;
-	croak "No password was defined" unless $self->password;
-	
-	$self->_POST_request(
-		qq{action=check-audio&email=${\$self->email}&password=${\$self->password}}
-	) or return;
-}
+=head1 METHOD PARAMETERS
 
-=head2 check_vimeo
+All methods require the same parameters as the upstream API, passed as hash
+where the keys are the request parameters and the values the corresponding
+data.
 
- check_vimeo();
+=head1 DOCUMENTATION
 
-Deprecated as the Tumblr API discontinued it.
+Please refer to each module for further tips, tricks and slightly more detailed
+documentation:
 
-Checks if the user is logged in on Vimeo, as specified by the Tumblr API.
-Returns the maximum number of bytes available for the user to upload in case
-the user is logged in, otherwise it returns undef.
+=over
 
-=cut
+=item *
 
-sub check_vimeo {
-	my($self) = shift;
-	
-	croak "No email was defined" unless $self->email;
-	croak "No password was defined" unless $self->password;
-	
-	$self->_POST_request(
-		qq{action=check-vimeo&email=${\$self->email}&password=${\$self->password}}
-	) or return;
-	
-	return $self->{_response};
-}
+L<WWW::Tumblr::Blog>
 
-=head2 authenticate
+=item *
 
- authenticate();
+L<WWW::Tumblr::User>
 
-Checks if the C<email> and C<password> specified are correct. If they are,
-it returns true, otherwise, undef.
+=item *
 
-=cut
+L<WWW::Tumblr::Tagged>
 
-sub authenticate {
-	my($self) = shift;
-	
-	croak "No email was defined" unless $self->email;
-	croak "No password was defined" unless $self->password;
+=item *
 
-	$self->_POST_request(
-		qq{action=authenticate&email=${\$self->email}&password=${\$self->password}}
-	) or return;
-}
+L<WWW::Tumblr::ResponseError>
 
-=head2 errstr
+=back
 
- errstr();
+Take also a look at the C<t/> directory inside the distribution. There you can see
+how you can do a bunch of things: get posts, submissions, post quotes, text,
+etc, etc.
 
-It returns the error string for the last operation, so you can see why
-other methods failed.
+=head1 AUTHORIZATION
 
-=cut
+It is possible to generate authorization URLs and do the whole OAuth dance. Please
+refer to the C<examples/> directory within the distribution to learn more.
 
-sub errstr {
-	my($self, $err) = @_;
-	$self->{errstr} = $err if $err;
-	$self->{errstr};
-}
+=head1 CAVEATS
 
-=head2 _POST_request
+This is considered an experimental version of the module. The request engine
+needs a complete rewrite, as well as proper documentation. The main author of the
+module wanted to release it like this to have people interested on Tumblr and Perl
+give it a spin.
 
- _POST_request($string);
+=head1 BUGS
 
-Internal method to post C<$string> to Tumblr. You shouldn't be using it anyway.
+Please report as many as you want/can. File them up at GitHub:
+L<https://github.com/damog/www-tumblr/issues/new>. Please don't use the CPAN RT.
 
-=cut
+=head1 MODULE AND TUMBLR API VERSION NOTE
 
+This module supports Tumblr API v2, starting from module version 5. Since the
+previous API was deprecated upstream anyway, there's no backwards compatibility
+with < 5 versions.
 
-sub _POST_request {
-	my($self, $args) = @_;
-	
-	croak "No arguments present" unless $args;
-	
-	my $req = HTTP::Request->new(POST => 'http://www.tumblr.com/api/write');
-	$req->content_type('application/x-www-form-urlencoded');
-	$req->content($args);
-	
-	my $res = $self->{ua}->request($req);
-	
-	if($res->is_success) {
-		return $self->{_response} = $res->decoded_content;
-	} else {
-		$self->{_response} = $res->decoded_content;
-		$self->errstr($self->{_response});
-		return;
-	}
-	
-}
+=
+
+=head1 AUTHOR(S)
+
+L<David Moreno|http://damog.net/> is the main author and maintainer of this module.
+The following amazing people have also contributed from version 5 onwards: Artem
+Krivopolenov, Squeeks, Fernando Vezzosi.
 
 =head1 SEE ALSO
 
-L<http://tumblr.com>, L<http://tumblr.com/api>. See also the sample scripts on the examples/ dir.
+=over
 
-This and other interesting modules and hacks are posted by the author on
-his blog Infinite Pig Theorem, L<http://damog.net>.
+=item *
 
-=head 1 CODE
+L<Net::OAuth> because, you know, we're based off it.
 
-The code is actively maintained at L<http://github.com/damog/www-tumblr>.
+=item *
 
-=head1 AUTHOR
+L<Moose>, likewise.
 
-David Moreno Garza, E<lt>david@axiombox.comE<gt>
+=back
 
-=head1 THANKS
+=head1 COPYRIGHT and LICENSE
 
-You know who (L<http://maggit.net>).
-
-=head1 COPYRIGHT AND LICENSE
-
-Copyright (C) 2008 by David Moreno Garza - Axiombox
-
-L<http://axiombox.com>
-
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.8 or,
-at your option, any later version of Perl 5 you may have available.
+This software is copyright (c) 2013 by David Moreno.
+ 
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
 
 =head1 DISCLAIMER
 
-I'm not a worker nor affiliated to Tumblr in any way, and this is a
-separated implementation of their own public API.
+The author is in no way affiliated to Tumblr or Yahoo! Inc. If either of them
+want to show their appreciation for this work, they contact the author directly
+or donate to the Perl Foundation at L<http://donate.perlfoundation.org/>.
 
 =cut
 
+use Moose;
+use Carp;
+use Data::Dumper;
+use HTTP::Request::Common;
+use Net::OAuth::Client;
+use WWW::Tumblr::API;
+use WWW::Tumblr::Blog;
+use WWW::Tumblr::User;
+use WWW::Tumblr::Authentication;
+use LWP::UserAgent;
+
+has 'consumer_key',     is => 'rw', isa => 'Str';
+has 'secret_key',       is => 'rw', isa => 'Str';
+has 'token',            is => 'rw', isa => 'Str';
+has 'token_secret',     is => 'rw', isa => 'Str';
+
+has 'callback',         is => 'rw', isa => 'Str';
+has 'error',            is => 'rw', isa => 'WWW::Tumblr::ResponseError';
+has 'ua',               is => 'rw', isa => 'LWP::UserAgent', default => sub { LWP::UserAgent->new };
+
+has 'session_store',	is => 'rw', isa => 'HashRef', default => sub { {} };
+
+has 'oauth',            is => 'rw', isa => 'Net::OAuth::Client', default => sub {
+	my $self = shift;
+	Net::OAuth::Client->new(
+		$self->consumer_key,
+		$self->secret_key,
+		request_token_path => 'http://www.tumblr.com/oauth/request_token',
+		authorize_path => 'http://www.tumblr.com/oauth/authorize',
+		access_token_path => 'http://www.tumblr.com/oauth/access_token',
+		callback => $self->callback, 
+		session => sub { if (@_ > 1) { $self->_session($_[0] => $_[1]) }; return $self->_session($_[0]) },
+	);
+};
+
+sub user {
+    my ( $self ) = shift;
+    return WWW::Tumblr::User->new({
+        consumer_key    => $self->consumer_key,
+        secret_key      => $self->secret_key,
+        token           => $self->token,
+        token_secret    => $self->token_secret,
+    });
+}
+
+sub blog {
+    my ( $self ) = shift;
+    my $name = shift or croak "A blog host name is needed.";
+
+    return WWW::Tumblr::Blog->new({
+        consumer_key    => $self->consumer_key,
+        secret_key      => $self->secret_key,
+        token           => $self->token,
+        token_secret    => $self->token_secret,
+        base_hostname   => $name,
+    });
+}
+
+sub tagged {
+    my $self = shift;
+    my $args = { @_ };
+
+    return $self->_tumblr_api_request({
+        auth => 'apikey',
+        http_method => 'GET',
+        url_path => 'tagged',
+        extra_args => $args,
+    });
+}
+
+sub oauth_tools {
+	my ( $self ) = shift;
+	return WWW::Tumblr::Authentication::OAuth->new(
+		consumer_key    => $self->consumer_key,
+        secret_key      => $self->secret_key,
+        callback		=> $self->callback,
+	);
+}
+
+sub _tumblr_api_request {
+    my $self    = shift;
+    my $r       = shift; #args
+
+    my $method_to_call = '_' . $r->{auth} . '_request';
+    return $self->$method_to_call(
+        $r->{http_method}, $r->{url_path}, $r->{extra_args}
+    );
+}
+
+sub _none_request {
+    my $self        = shift;
+    my $method      = shift;
+    my $url_path    = shift;
+    my $params      = shift;
+
+    my $req;
+    if ( $method eq 'GET' ) {
+        print "Requesting... " .'http://api.tumblr.com/v2/' . $url_path, "\n";
+        $req = HTTP::Request->new(
+            $method => 'http://api.tumblr.com/v2/' . $url_path,
+        );
+    } elsif ( $method eq 'POST' ) {
+        Carp::croak "Unimplemented";
+    } else {
+        die "dude, wtf.";
+    }
+
+    my $res = $self->ua->request( $req );
+
+    if ( my $prev = $res->previous ) {
+        return $prev;
+    } else { return $res };
+}
+
+sub _apikey_request {
+    my $self        = shift;
+    my $method      = shift;
+    my $url_path    = shift;
+    my $params      = shift;
+
+    my $req; # request object
+    if ( $method eq 'GET' ) {
+        $req = HTTP::Request->new(
+            $method => 'http://api.tumblr.com/v2/' . $url_path . '?api_key='.$self->consumer_key . '&' .
+            ( join '&', map { $_ .'='. $params->{ $_} } keys %$params )
+        );
+    } elsif ( $method eq 'POST' ) {
+        Carp::croak "Unimplemented";
+    } else {
+        die "$method misunderstood";
+    }
+
+    my $res = $self->ua->request( $req );
+
+}
+
+sub _oauth_request {
+	my $self = shift;
+	my $method = shift;
+	my $url_path= shift;
+	my $params = shift;
+
+    my $data = delete $params->{data};
+
+	my $request = $self->oauth->_make_request(
+		'protected resource', 
+		request_method => uc $method,
+		request_url => 'http://api.tumblr.com/v2/' . $url_path,
+		consumer_key => $self->consumer_key,
+	    consumer_secret => $self->secret_key,
+		token => $self->token,
+		token_secret => $self->token_secret,
+		extra_params => $params,
+	);
+	$request->sign;
+
+    my $authorization_signature = $request->to_authorization_header;
+
+    my $message;
+    if ( $method eq 'GET' ) {
+        $message = GET 'http://api.tumblr.com/v2/' . $url_path . '?' . $request->normalized_message_parameters, 'Authorization' => $authorization_signature;
+    } elsif ( $method eq 'POST' ) {
+        $message = POST('http://api.tumblr.com/v2/' . $url_path,
+            Content_Type => 'form-data',
+            Authorization => $authorization_signature,
+            Content => [
+                %$params, ( $data ? do {
+                    my $i = -1;
+                    map { $i++; 'data[' . $i .']' => [ $_ ] } @$data
+                } : () )
+            ]);
+    }
+
+	return $self->ua->request( $message );
+}
+
+sub _session {
+	my $self = shift;
+
+	if ( ref $_[0] eq 'HASH' ) {
+		$self->session_store($_[0]);
+	} elsif ( @_ > 1 ) {
+		$self->session_store->{$_[0]} = $_[1]
+	}
+	return $_[0] ? $self->session_store->{$_[0]} : $self->session_store;
+}
+
 1;
+
