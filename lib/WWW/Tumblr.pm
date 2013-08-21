@@ -3,7 +3,7 @@ package WWW::Tumblr;
 use strict;
 use warnings;
 
-our $VERSION = '5.00_01';
+our $VERSION = '5.00_02';
 
 =pod
 
@@ -13,7 +13,7 @@ WWW::Tumblr - Perl bindings for the Tumblr API
 
 =head1 VERSION
 
-5.00_01 (experimental release)
+5.00_02 (experimental release)
 
 =head1 SYNOPSIS
 
@@ -28,7 +28,7 @@ WWW::Tumblr - Perl bindings for the Tumblr API
 
   print Dumper $blog->info;
 
-head1 DESCRIPTION
+=head1 DESCRIPTION
 
 This module makes use of some sort of the same models as the upstream API,
 meaning that you will have User, Blog and Tagged methods:
@@ -127,8 +127,6 @@ L<https://github.com/damog/www-tumblr/issues/new>. Please don't use the CPAN RT.
 This module supports Tumblr API v2, starting from module version 5. Since the
 previous API was deprecated upstream anyway, there's no backwards compatibility
 with < 5 versions.
-
-=
 
 =head1 AUTHOR(S)
 
