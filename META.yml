@@ -30,4 +30,4 @@ resources:
   bugtracker: https://github.com/damog/www-tumblr/issues
   homepage: http://github.com/damog/www-tumblr
   repository: git://github.com/damog/www-tumblr.git
-version: 5.00_03
+version: 5.00_04
