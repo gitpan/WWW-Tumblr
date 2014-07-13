@@ -4,7 +4,7 @@
       "David Moreno <david@axiombox.com>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.72, CPAN::Meta::Converter version 2.132140",
+   "generated_by" : "ExtUtils::MakeMaker version 6.66, CPAN::Meta::Converter version 2.141520",
    "license" : [
       "perl_5"
    ],
@@ -53,5 +53,5 @@
          "url" : "git://github.com/damog/www-tumblr.git"
       }
    },
-   "version" : "5.00"
+   "version" : "5.1"
 }

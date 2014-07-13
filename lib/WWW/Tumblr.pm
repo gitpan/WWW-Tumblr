@@ -3,7 +3,7 @@ package WWW::Tumblr;
 use strict;
 use warnings;
 
-our $VERSION = '5.00';
+our $VERSION = '5.1';
 
 =pod
 
@@ -331,8 +331,12 @@ sub _oauth_request {
             Authorization => $authorization_signature,
             Content => [
                 %$params, ( $data ? do {
-                    my $i = -1;
-                    map { $i++; 'data[' . $i .']' => [ $_ ] } @$data
+                   if (ref($data) eq 'ARRAY') {
+                      my $i = -1;
+                      map { $i++; 'data[' . $i .']' => [ $_ ] } @$data
+                   } else {
+                     'data' => [ $data ]
+                   }
                 } : () )
             ]);
     }
